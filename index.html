@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Círculo de Quintas y el Diapasón</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --highlight: rgba(255, 255, 255, 0.15);
+            --highlight-border: rgba(255, 255, 255, 0.8);
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            text-align: center;
+            font-weight: 300;
+            margin-bottom: 5px;
+            color: #fff;
+        }
+
+        p.subtitle {
+            text-align: center;
+            color: #aaa;
+            margin-bottom: 40px;
+        }
+
+        /* Contenedor principal del layout */
+        .app-layout {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 50px;
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        /* --- CÍRCULO INTERACTIVO --- */
+        .circle-wrapper {
+            position: relative;
+            width: 360px;
+            height: 360px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* El anillo que gira */
+        #highlight-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            /* Crea un arco de 150 grados (cubre exactamente 5 notas) */
+            background: conic-gradient(from -15deg, var(--highlight) 0deg, var(--highlight) 150deg, transparent 150deg);
+            /* Agrega un borde brillante en los bordes del bloque */
+            box-shadow: inset 0 0 0 2px transparent; 
+            transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        /* Borde exterior del anillo para darle volumen */
+        #highlight-ring::after {
+            content: '';
+            position: absolute;
+            top: -10px; left: -10px; right: -10px; bottom: -10px;
+            border-radius: 50%;
+            background: conic-gradient(from -15deg, var(--highlight-border) 0deg, var(--highlight-border) 150deg, transparent 150deg);
+            -webkit-mask: radial-gradient(transparent 68%, black 69%);
+            mask: radial-gradient(transparent 68%, black 69%);
+        }
+
+        .note {
+            position: absolute;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 60px;
+            height: 60px;
+            font-size: 22px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s, filter 0.2s;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+            z-index: 2;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .note:hover {
+            filter: brightness(1.2);
+            transform: scale(1.1) !important; /* Mantiene la rotación original desde JS */
+        }
+
+        .shape-circle { border-radius: 50%; border: 2px solid #222; }
+        .shape-square { border-radius: 6px; border: 2px solid #222; }
+
+        /* --- PANEL DE INFORMACIÓN --- */
+        .info-panel {
+            background: var(--panel-bg);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .fret-header {
+            font-size: 24px;
+            border-bottom: 2px solid #444;
+            padding-bottom: 10px;
+            color: #fff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .string-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .string-item {
+            display: flex;
+            justify-content: space-between;
+            background: #2a2a2a;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        .string-item span.string-name { color: #888; }
+        .string-item span.note-val { font-weight: bold; color: #fff; }
+
+        .sequence-box {
+            background: #111;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid #333;
+        }
+
+        .sequence-box h4 {
+            margin: 0 0 10px 0;
+            color: #aaa;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .sequence-notes {
+            font-size: 20px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            color: #fff;
+        }
+
+        /* Responsividad */
+        @media (max-width: 768px) {
+            .app-layout { flex-direction: column; align-items: center; }
+            .circle-wrapper { transform: scale(0.9); margin-bottom: -20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Diapasón & Círculo de Quintas</h1>
+    <p class="subtitle">Selecciona una nota para ver su patrón en el diapasón</p>
+
+    <div class="app-layout">
+        <div class="circle-wrapper" id="circle">
+            <div id="highlight-ring"></div>
+            </div>
+
+        <div class="info-panel" id="panel">
+            <div class="fret-header">
+                <span id="fret-title">Traste --</span>
+                <span id="root-note" style="color: #888; font-size: 16px;">Raíz: --</span>
+            </div>
+            
+            <div class="string-list" id="string-list">
+                <div style="text-align:center; color:#666; padding: 20px 0;">Haz clic en el círculo para comenzar</div>
+            </div>
+
+            <div class="sequence-box">
+                <h4>Secuencia en el Círculo</h4>
+                <div class="sequence-notes" id="sequence-notes">-- → -- → -- → -- → --</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. Configuración de Datos Originales (Colores aproximados a tu imagen)
+        const cofNotes = [
+            { note: 'C',  type: 'square', color: '#E02341' },
+            { note: 'G',  type: 'circle', color: '#E86624' },
+            { note: 'D',  type: 'square', color: '#F09B29' },
+            { note: 'A',  type: 'circle', color: '#F4C530' },
+            { note: 'E',  type: 'square', color: '#E0E622' },
+            { note: 'B',  type: 'circle', color: '#91C439' },
+            { note: 'F#', type: 'square', color: '#39A848' },
+            { note: 'C#', type: 'circle', color: '#169F93' },
+            { note: 'G#', type: 'square', color: '#108AC2' },
+            { note: 'D#', type: 'circle', color: '#3557AC' },
+            { note: 'A#', type: 'square', color: '#7B3C95' },
+            { note: 'F',  type: 'circle', color: '#B7287E' }
+        ];
+
+        // Escala cromática para cálculos matemáticos
+        const chromatic = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        
+        // Afinación estándar (Cuerdas 6 a 1)
+        const guitarStrings = [
+            { num: 6, open: 'E' },
+            { num: 5, open: 'A' },
+            { num: 4, open: 'D' },
+            { num: 3, open: 'G' },
+            { num: 2, open: 'B' },
+            { num: 1, open: 'E' }
+        ];
+
+        const container = document.getElementById('circle');
+        const highlightRing = document.getElementById('highlight-ring');
+        const radius = 140; 
+        let currentRotation = 0; // Para animación fluida continua
+
+        // 2. Construir el entorno visual del círculo
+        cofNotes.forEach((item, index) => {
+            const el = document.createElement('div');
+            el.className = `note ${item.type === 'circle' ? 'shape-circle' : 'shape-square'}`;
+            el.innerText = item.note;
+            el.style.backgroundColor = item.color;
+
+            const angle = (index * 30) - 90; 
+            const radian = angle * (Math.PI / 180);
+            const x = Math.cos(radian) * radius;
+            const y = Math.sin(radian) * radius;
+
+            // Offset para centrar la nota (-30px porque el ancho/alto es 60px)
+            let rotation = item.type === 'square' ? 'rotate(15deg)' : 'rotate(0deg)';
+            el.style.transform = `translate(calc(${x}px - 30px), calc(${y}px - 30px)) ${rotation}`;
+
+            el.addEventListener('click', () => processGuitarLogic(index, item.note));
+            container.appendChild(el);
+        });
+
+        // 3. Lógica central de la Guitarra y el Círculo
+        function getNoteAtFret(openNote, fret) {
+            let startIndex = chromatic.indexOf(openNote);
+            return chromatic[(startIndex + fret) % 12];
+        }
+
+        function processGuitarLogic(cofIndex, rootNote) {
+            // A) Encontrar el traste donde la 1ra cuerda (E) es igual a rootNote
+            let indexE = chromatic.indexOf('E');
+            let indexTarget = chromatic.indexOf(rootNote);
+            // Si la nota es E, preferimos mostrar traste 0 en lugar de 12 para simplicidad inicial
+            let fretNumber = (indexTarget - indexE + 12) % 12;
+
+            // B) Obtener las notas en ese traste para las 6 cuerdas
+            let fretNotes = guitarStrings.map(s => ({
+                stringNum: s.num,
+                stringName: s.open,
+                note: getNoteAtFret(s.open, fretNumber)
+            }));
+
+            // C) Matemáticas del Círculo: 
+            // En afinación estándar, CUALQUIER traste genera 5 notas consecutivas en el círculo.
+            // El inicio de este bloque en el círculo se desplaza 7 posiciones (una quinta) por cada traste.
+            // Traste 0 empieza en G (índice 1 del arreglo cofNotes).
+            let startCoFIndex = (1 + (fretNumber * 7)) % 12;
+
+            // Extraer la secuencia en orden de quintas
+            let sequence = [];
+            for(let i=0; i<5; i++) {
+                sequence.push(cofNotes[(startCoFIndex + i) % 12].note);
+            }
+
+            // D) Actualizar UI
+            rotateHighlight(startCoFIndex);
+            updatePanel(fretNumber, rootNote, fretNotes, sequence);
+        }
+
+        // 4. Rotación Acumulativa (El secreto para que gire fluido sin reiniciarse)
+        function rotateHighlight(targetIndex) {
+            // Cada nota ocupa 30 grados
+            let targetAngle = targetIndex * 30;
+            
+            // Calculamos la distancia más corta para girar
+            let currentMod = currentRotation % 360;
+            if (currentMod < 0) currentMod += 360; // Normalizar a positivo
+            
+            let diff = targetAngle - currentMod;
+            
+            // Forzar a girar por el camino más corto cruzando el punto de 12 en punto
+            if (diff > 180) diff -= 360;
+            if (diff < -180) diff += 360;
+
+            currentRotation += diff;
+            highlightRing.style.transform = `rotate(${currentRotation}deg)`;
+        }
+
+        // 5. Actualizar el panel de texto
+        function updatePanel(fret, root, notesData, sequence) {
+            document.getElementById('fret-title').innerText = fret === 0 ? 'Al Aire (Traste 0)' : `Traste ${fret}`;
+            document.getElementById('root-note').innerText = `1ª Cuerda: ${root}`;
+
+            const listEl = document.getElementById('string-list');
+            listEl.innerHTML = '';
+            
+            notesData.forEach(data => {
+                listEl.innerHTML += `
+                    <div class="string-item">
+                        <span class="string-name">${data.stringNum}ª Cuerda (${data.stringName})</span>
+                        <span class="note-val">${data.note}</span>
+                    </div>
+                `;
+            });
+
+            document.getElementById('sequence-notes').innerText = sequence.join(' → ');
+        }
+    </script>
+</body>
+</html>
