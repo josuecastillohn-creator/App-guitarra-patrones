@@ -269,4 +269,110 @@
 
                 // Guardar las variables en el elemento para que CSS las use sin perderlas
                 el.style.setProperty('--tx', `${x}px`);
+                el.style.setProperty('--ty', `${y}px`);
+                el.id = `note-${index}`;
+
+                el.addEventListener('click', () => handleNoteSelect(index));
+                circleContainer.appendChild(el);
+            });
+
+            if (currentFret !== null) {
+                renderFret();
+            }
+        }
+
+        // --- LÓGICA DE EVENTOS ---
+        btnAccidental.addEventListener('click', () => {
+            useFlats = !useFlats;
+            btnAccidental.innerText = useFlats ? "Usar Sostenidos (#)" : "Usar Bemoles (b)";
+            btnAccidental.classList.toggle('active-toggle', useFlats);
+            initCircle();
+        });
+
+        // Evento cuando escoges un traste de la lista
+        fretSelect.addEventListener('change', (e) => {
+            currentFret = parseInt(e.target.value);
+            renderFret();
+        });
+
+        // Evento cuando tocas el círculo
+        function handleNoteSelect(cofIndex) {
+            const currentNotes = useFlats ? notesFlat : notesSharp;
+            const currentChrom = useFlats ? chromFlat : chromSharp;
+            
+            const targetNoteName = currentNotes[cofIndex];
+            const targetChromIndex = currentChrom.indexOf(targetNoteName);
+            
+            // Calculamos en qué traste bajo (0-11) está esa nota en la 1ra cuerda
+            let baseFret = (targetChromIndex - 4 + 12) % 12;
+            
+            currentFret = baseFret;
+            fretSelect.value = baseFret; // Actualizamos el menú desplegable
+            renderFret();
+        }
+
+        // --- RENDERIZADO VISUAL ---
+        function renderFret() {
+            if (currentFret === null) return;
+
+            const currentChrom = useFlats ? chromFlat : chromSharp;
+            let stringsData = [];
+            let cofBadgeMap = {}; 
+
+            openStringsChrom.forEach((openChrom, stringIdx) => {
+                const stringNum = stringIdx + 1;
+                const noteChrom = (openChrom + currentFret) % 12;
+                const noteName = currentChrom[noteChrom];
+                const cofIdx = chromToCof[noteChrom];
+
+                stringsData.push({
+                    stringName: stringNames[stringIdx],
+                    noteName: noteName
+                });
+
+                if (!cofBadgeMap[cofIdx]) cofBadgeMap[cofIdx] = [];
+                cofBadgeMap[cofIdx].push(`${stringNum}ª`);
+            });
+
+            // Limpiar UI
+            document.querySelectorAll('.note').forEach(el => {
+                el.classList.add('inactive');
+                el.classList.remove('active-root');
+                el.querySelector('.string-badge-container').innerHTML = '';
+            });
+
+            // Encontrar el índice del círculo para la nota de la 1ra cuerda (raíz)
+            const firstStringCofIdx = chromToCof[(openStringsChrom[0] + currentFret) % 12];
+
+            // Activar las notas correspondientes
+            Object.keys(cofBadgeMap).forEach(cofIdx => {
+                const noteEl = document.getElementById(`note-${cofIdx}`);
+                noteEl.classList.remove('inactive');
+                
+                if (parseInt(cofIdx) === firstStringCofIdx) {
+                    noteEl.classList.add('active-root');
+                }
+
+                const badgeContainer = document.getElementById(`badges-${cofIdx}`);
+                badgeContainer.innerHTML = `<div class="string-badge">${cofBadgeMap[cofIdx].join(', ')}</div>`;
+            });
+
+            // Actualizar Panel
+            fretTitle.innerText = currentFret === 0 ? 'Cuerdas al Aire (Traste 0)' : `Traste ${currentFret}`;
+            
+            stringsList.innerHTML = '';
+            stringsData.forEach(data => {
+                stringsList.innerHTML += `
+                    <div class="string-row">
+                        <span>${data.stringName}</span>
+                        <span>${data.noteName}</span>
+                    </div>
+                `;
+            });
+        }
+
+        initCircle();
+    </script>
+</body>
+</html>
 
