@@ -34,6 +34,7 @@
             margin-bottom: 30px;
             flex-wrap: wrap;
             justify-content: center;
+            align-items: center;
         }
 
         button {
@@ -43,12 +44,11 @@
             padding: 10px 20px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 15px;
             transition: all 0.2s;
         }
 
-        button:hover:not(:disabled) { background-color: #444; border-color: #888; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button:hover { background-color: #444; border-color: #888; }
         
         button.active-toggle {
             background-color: #4CAF50;
@@ -56,6 +56,20 @@
             color: #000;
             font-weight: bold;
         }
+
+        /* Nuevo Selector de Traste */
+        .fret-selector {
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            outline: none;
+        }
+        
+        .fret-selector:focus { border-color: #fff; }
 
         /* Layout Principal */
         .app-layout {
@@ -73,7 +87,7 @@
             width: 340px;
             height: 340px;
             border-radius: 50%;
-            border: 2px dashed #333; /* Guía visual sutil */
+            border: 2px dashed #333; 
         }
 
         .note {
@@ -92,25 +106,36 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.5);
             border: 2px solid transparent;
             -webkit-tap-highlight-color: transparent;
-            /* Centrado matemático */
+            
+            /* Centrado matemático inicial */
             left: 50%;
             top: 50%;
             margin-left: -30px;
             margin-top: -30px;
+
+            /* Las variables --tx y --ty se inyectan desde JavaScript para evitar el bug de colisión */
+            transform: translate(var(--tx), var(--ty)) scale(1);
         }
 
+        .note:hover {
+            transform: translate(var(--tx), var(--ty)) scale(1.1);
+            z-index: 10;
+        }
+
+        /* SOLUCIÓN AL BUG: Ahora respeta --tx y --ty para que no se agrupen en el centro */
         .note.inactive {
-            opacity: 0.25;
-            transform: scale(0.9) !important; /* Mantiene la posición pero se hace un poco más pequeña */
+            opacity: 0.2;
+            transform: translate(var(--tx), var(--ty)) scale(0.85); 
             box-shadow: none;
         }
 
         .note.active-root {
             border: 3px solid #fff;
             box-shadow: 0 0 20px rgba(255,255,255,0.4);
+            z-index: 5;
         }
 
-        /* Etiquetas de Cuerdas (Badges) */
+        /* Etiquetas de Cuerdas */
         .string-badge-container {
             position: absolute;
             bottom: -15px;
@@ -163,11 +188,13 @@
 <body>
 
     <h1>Diapasón Intuitivo</h1>
-    <p class="subtitle">Selecciona la nota de la 1ª cuerda</p>
+    <p class="subtitle">Selecciona una nota o un traste para explorar</p>
 
     <div class="controls">
         <button id="btn-accidental">Usar Bemoles (b)</button>
-        <button id="btn-fret" disabled>Ver Traste Alto (+12)</button>
+        <select id="fret-select" class="fret-selector">
+            <option value="" disabled selected>Elige un Traste...</option>
+            </select>
     </div>
 
     <div class="app-layout">
@@ -177,7 +204,7 @@
         <div class="info-panel" id="panel">
             <h2 id="fret-title">Traste --</h2>
             <div id="strings-list">
-                <p style="color: #666; text-align:center; padding: 20px 0;">Selecciona una nota en el círculo para ver la distribución de cuerdas.</p>
+                <p style="color: #666; text-align:center; padding: 20px 0;">Selecciona una nota en el círculo o elige un traste arriba.</p>
             </div>
         </div>
     </div>
@@ -186,38 +213,39 @@
         // --- DATOS MUSICALES ---
         const colors = ['#E02341', '#E86624', '#F09B29', '#F4C530', '#E0E622', '#91C439', '#39A848', '#169F93', '#108AC2', '#3557AC', '#7B3C95', '#B7287E'];
         
-        // Círculo de Quintas (Índices 0 a 11)
         const notesSharp = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'G#', 'D#', 'A#', 'F'];
         const notesFlat  = ['C', 'G', 'D', 'A', 'E', 'B', 'Gb', 'Db', 'Ab', 'Eb', 'Bb', 'F'];
         
-        // Escala Cromática para cálculos (Base C = 0)
         const chromSharp = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         const chromFlat  = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
 
-        // Mapa: Índice cromático -> Índice en el Círculo de Quintas
         const chromToCof = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
-
-        // Afinación Estándar (Índices cromáticos de cuerdas al aire: 1ra a 6ta)
-        // 1:E(4), 2:B(11), 3:G(7), 4:D(2), 5:A(9), 6:E(4)
         const openStringsChrom = [4, 11, 7, 2, 9, 4]; 
         const stringNames = ["1ª Cuerda (E)", "2ª Cuerda (B)", "3ª Cuerda (G)", "4ª Cuerda (D)", "5ª Cuerda (A)", "6ª Cuerda (E)"];
 
         // --- ESTADO DE LA APP ---
         let useFlats = false;
-        let showHighFret = false;
-        let selectedCofIndex = null; // Qué nota tocó el usuario en el círculo
+        let currentFret = null; // Control principal de estado
 
         // --- ELEMENTOS DOM ---
         const circleContainer = document.getElementById('circle');
         const btnAccidental = document.getElementById('btn-accidental');
-        const btnFret = document.getElementById('btn-fret');
+        const fretSelect = document.getElementById('fret-select');
         const fretTitle = document.getElementById('fret-title');
         const stringsList = document.getElementById('strings-list');
 
-        // --- INICIALIZACIÓN ---
+        // --- INICIALIZAR EL MENÚ DE TRASTES ---
+        for (let i = 0; i <= 24; i++) {
+            let option = document.createElement('option');
+            option.value = i;
+            option.text = i === 0 ? "Traste 0 (Al aire)" : `Traste ${i}`;
+            fretSelect.appendChild(option);
+        }
+
+        // --- INICIALIZACIÓN DEL CÍRCULO ---
         function initCircle() {
             circleContainer.innerHTML = '';
-            const radius = 145; // Distancia desde el centro
+            const radius = 145; 
             const notesArray = useFlats ? notesFlat : notesSharp;
 
             notesArray.forEach((noteName, index) => {
@@ -225,136 +253,20 @@
                 el.className = 'note';
                 el.style.backgroundColor = colors[index];
                 
-                // Contenedor para el texto de la nota
                 const textSpan = document.createElement('span');
                 textSpan.innerText = noteName;
                 el.appendChild(textSpan);
 
-                // Contenedor para las etiquetas (1ª, 2ª, etc.)
                 const badgeContainer = document.createElement('div');
                 badgeContainer.className = 'string-badge-container';
                 badgeContainer.id = `badges-${index}`;
                 el.appendChild(badgeContainer);
 
-                // Matemáticas circulares (C arriba a las 12 en punto = -90 grados)
                 const angle = (index * 30) - 90;
                 const radian = angle * (Math.PI / 180);
                 const x = Math.cos(radian) * radius;
                 const y = Math.sin(radian) * radius;
 
-                el.style.transform = `translate(${x}px, ${y}px)`;
-                el.id = `note-${index}`;
+                // Guardar las variables en el elemento para que CSS las use sin perderlas
+                el.style.setProperty('--tx', `${x}px`);
 
-                el.addEventListener('click', () => handleNoteSelect(index));
-                circleContainer.appendChild(el);
-            });
-
-            // Si ya había una nota seleccionada, refrescar la vista
-            if (selectedCofIndex !== null) {
-                renderSelection();
-            }
-        }
-
-        // --- LÓGICA DE EVENTOS ---
-        btnAccidental.addEventListener('click', () => {
-            useFlats = !useFlats;
-            btnAccidental.innerText = useFlats ? "Usar Sostenidos (#)" : "Usar Bemoles (b)";
-            btnAccidental.classList.toggle('active-toggle', useFlats);
-            initCircle();
-        });
-
-        btnFret.addEventListener('click', () => {
-            showHighFret = !showHighFret;
-            renderSelection();
-        });
-
-        function handleNoteSelect(cofIndex) {
-            selectedCofIndex = cofIndex;
-            btnFret.disabled = false; // Habilitar el botón de octava
-            showHighFret = false; // Resetear al traste bajo por defecto
-            renderSelection();
-        }
-
-        // --- RENDERIZADO DEL CÁLCULO ---
-        function renderSelection() {
-            if (selectedCofIndex === null) return;
-
-            const currentNotes = useFlats ? notesFlat : notesSharp;
-            const currentChrom = useFlats ? chromFlat : chromSharp;
-
-            // 1. Calcular el traste base
-            // La 1ra cuerda es E (índice cromático 4).
-            // Necesitamos saber el índice cromático de la nota seleccionada.
-            const targetNoteName = currentNotes[selectedCofIndex];
-            const targetChromIndex = currentChrom.indexOf(targetNoteName);
-            
-            let baseFret = (targetChromIndex - 4 + 12) % 12;
-            // Si la nota es E y estamos en base, mostrar 0 (al aire). Si no, el número normal.
-            let actualFret = showHighFret ? (baseFret === 0 ? 12 : baseFret + 12) : baseFret;
-
-            // Actualizar botón de traste
-            btnFret.innerText = showHighFret ? `Ver Traste Bajo (${baseFret})` : `Ver Traste Alto (${baseFret === 0 ? 12 : baseFret + 12})`;
-            btnFret.classList.toggle('active-toggle', showHighFret);
-
-            // 2. Calcular qué nota cae en cada cuerda en ese traste
-            let stringsData = [];
-            // Para agrupar cuerdas que caen en la misma nota (ej. 1ra y 6ta)
-            let cofBadgeMap = {}; 
-
-            openStringsChrom.forEach((openChrom, stringIdx) => {
-                const stringNum = stringIdx + 1;
-                const noteChrom = (openChrom + actualFret) % 12;
-                const noteName = currentChrom[noteChrom];
-                const cofIdx = chromToCof[noteChrom];
-
-                stringsData.push({
-                    stringName: stringNames[stringIdx],
-                    noteName: noteName
-                });
-
-                if (!cofBadgeMap[cofIdx]) cofBadgeMap[cofIdx] = [];
-                cofBadgeMap[cofIdx].push(`${stringNum}ª`);
-            });
-
-            // 3. Actualizar Visualmente el Círculo
-            document.querySelectorAll('.note').forEach(el => {
-                el.classList.add('inactive');
-                el.classList.remove('active-root');
-                el.querySelector('.string-badge-container').innerHTML = ''; // Limpiar badges
-            });
-
-            // Activar las notas correspondientes y ponerles badges
-            Object.keys(cofBadgeMap).forEach(cofIdx => {
-                const noteEl = document.getElementById(`note-${cofIdx}`);
-                noteEl.classList.remove('inactive');
-                
-                // Si es la nota raíz (1ra cuerda), ponerle el borde especial
-                if (parseInt(cofIdx) === selectedCofIndex) {
-                    noteEl.classList.add('active-root');
-                }
-
-                // Inyectar los badges
-                const badgeContainer = document.getElementById(`badges-${cofIdx}`);
-                const badgesString = cofBadgeMap[cofIdx].join(', ');
-                badgeContainer.innerHTML = `<div class="string-badge">${badgesString}</div>`;
-            });
-
-            // 4. Actualizar Panel Lateral
-            fretTitle.innerText = actualFret === 0 ? 'Cuerdas al Aire' : `Traste ${actualFret}`;
-            
-            stringsList.innerHTML = '';
-            stringsData.forEach(data => {
-                stringsList.innerHTML += `
-                    <div class="string-row">
-                        <span>${data.stringName}</span>
-                        <span>${data.noteName}</span>
-                    </div>
-                `;
-            });
-        }
-
-        // Arrancar la app
-        initCircle();
-    </script>
-</body>
-</html>
