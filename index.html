@@ -25,51 +25,67 @@
         }
 
         h1 { font-weight: 300; margin-bottom: 5px; text-align: center; }
-        .subtitle { color: #888; margin-bottom: 25px; text-align: center; }
+        .subtitle { color: #888; margin-bottom: 25px; text-align: center; font-size: 14px; }
 
         /* Controles Superiores */
         .controls {
             display: flex;
+            flex-direction: column;
             gap: 15px;
             margin-bottom: 30px;
-            flex-wrap: wrap;
-            justify-content: center;
+            width: 100%;
+            max-width: 350px;
             align-items: center;
         }
 
-        button {
+        button.toggle-btn {
             background-color: #333;
             color: white;
             border: 1px solid #555;
-            padding: 10px 20px;
+            padding: 12px 20px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 15px;
-            transition: all 0.2s;
+            font-size: 16px;
+            width: 100%;
+            transition: background-color 0.2s;
         }
 
-        button:hover { background-color: #444; border-color: #888; }
-        
-        button.active-toggle {
+        button.toggle-btn.active-toggle {
             background-color: #4CAF50;
             border-color: #4CAF50;
             color: #000;
             font-weight: bold;
         }
 
-        /* Nuevo Selector de Traste */
-        .fret-selector {
-            background-color: #333;
+        /* Selector de Traste Gigante */
+        .fret-selector-box {
+            background: #222;
+            border: 2px solid #444;
+            padding: 15px;
+            border-radius: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .fret-selector-box label {
+            display: block;
+            color: #ccc;
+            margin-bottom: 10px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .fret-selector-box select {
+            width: 100%;
+            padding: 12px;
+            font-size: 18px;
+            background: #111;
             color: white;
-            border: 1px solid #555;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 15px;
-            cursor: pointer;
+            border: 1px solid #666;
+            border-radius: 6px;
             outline: none;
         }
-        
-        .fret-selector:focus { border-color: #fff; }
 
         /* Layout Principal */
         .app-layout {
@@ -102,36 +118,20 @@
             font-weight: bold;
             color: white;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            /* La transición ahora solo afecta color y opacidad, NADA de tamaño o posición */
+            transition: opacity 0.3s ease, border 0.3s ease, box-shadow 0.3s ease;
             border: 2px solid transparent;
             -webkit-tap-highlight-color: transparent;
-            
-            /* Centrado matemático inicial */
-            left: 50%;
-            top: 50%;
-            margin-left: -30px;
-            margin-top: -30px;
-
-            /* Las variables --tx y --ty se inyectan desde JavaScript para evitar el bug de colisión */
-            transform: translate(var(--tx), var(--ty)) scale(1);
         }
 
-        .note:hover {
-            transform: translate(var(--tx), var(--ty)) scale(1.1);
-            z-index: 10;
-        }
-
-        /* SOLUCIÓN AL BUG: Ahora respeta --tx y --ty para que no se agrupen en el centro */
+        /* ESTA ES LA SOLUCIÓN AL BUG: Solo bajamos la opacidad, no tocamos la posición */
         .note.inactive {
-            opacity: 0.2;
-            transform: translate(var(--tx), var(--ty)) scale(0.85); 
-            box-shadow: none;
+            opacity: 0.3;
         }
 
         .note.active-root {
             border: 3px solid #fff;
-            box-shadow: 0 0 20px rgba(255,255,255,0.4);
+            box-shadow: 0 0 15px rgba(255,255,255,0.6);
             z-index: 5;
         }
 
@@ -168,6 +168,7 @@
             flex-direction: column;
             gap: 15px;
             border: 1px solid #333;
+            box-sizing: border-box;
         }
 
         .info-panel h2 { margin: 0; font-size: 24px; border-bottom: 1px solid #444; padding-bottom: 10px;}
@@ -188,13 +189,17 @@
 <body>
 
     <h1>Diapasón Intuitivo</h1>
-    <p class="subtitle">Selecciona una nota o un traste para explorar</p>
+    <p class="subtitle">Descubre qué notas conforman cada traste</p>
 
     <div class="controls">
-        <button id="btn-accidental">Usar Bemoles (b)</button>
-        <select id="fret-select" class="fret-selector">
-            <option value="" disabled selected>Elige un Traste...</option>
-            </select>
+        <button id="btn-accidental" class="toggle-btn">Ver en Bemoles (b)</button>
+        
+        <div class="fret-selector-box">
+            <label for="fret-select">¿Qué traste quieres ver?</label>
+            <select id="fret-select">
+                <option value="" disabled selected>Toca aquí para elegir...</option>
+                </select>
+        </div>
     </div>
 
     <div class="app-layout">
@@ -204,7 +209,7 @@
         <div class="info-panel" id="panel">
             <h2 id="fret-title">Traste --</h2>
             <div id="strings-list">
-                <p style="color: #666; text-align:center; padding: 20px 0;">Selecciona una nota en el círculo o elige un traste arriba.</p>
+                <p style="color: #666; text-align:center; padding: 20px 0;">Selecciona un traste arriba o toca una nota en el círculo.</p>
             </div>
         </div>
     </div>
@@ -223,29 +228,31 @@
         const openStringsChrom = [4, 11, 7, 2, 9, 4]; 
         const stringNames = ["1ª Cuerda (E)", "2ª Cuerda (B)", "3ª Cuerda (G)", "4ª Cuerda (D)", "5ª Cuerda (A)", "6ª Cuerda (E)"];
 
-        // --- ESTADO DE LA APP ---
+        // --- ESTADO ---
         let useFlats = false;
-        let currentFret = null; // Control principal de estado
+        let currentFret = null; 
 
-        // --- ELEMENTOS DOM ---
+        // --- DOM ---
         const circleContainer = document.getElementById('circle');
         const btnAccidental = document.getElementById('btn-accidental');
         const fretSelect = document.getElementById('fret-select');
         const fretTitle = document.getElementById('fret-title');
         const stringsList = document.getElementById('strings-list');
 
-        // --- INICIALIZAR EL MENÚ DE TRASTES ---
+        // --- LLENAR EL MENÚ DE TRASTES ---
         for (let i = 0; i <= 24; i++) {
             let option = document.createElement('option');
             option.value = i;
-            option.text = i === 0 ? "Traste 0 (Al aire)" : `Traste ${i}`;
+            option.text = i === 0 ? "Traste 0 (Cuerdas al aire)" : `Traste ${i}`;
             fretSelect.appendChild(option);
         }
 
-        // --- INICIALIZACIÓN DEL CÍRCULO ---
+        // --- INICIALIZAR EL CÍRCULO CON COORDENADAS FIJAS ---
         function initCircle() {
             circleContainer.innerHTML = '';
-            const radius = 145; 
+            const radius = 140; 
+            const centerX = 170; // Mitad de 340px
+            const centerY = 170; // Mitad de 340px
             const notesArray = useFlats ? notesFlat : notesSharp;
 
             notesArray.forEach((noteName, index) => {
@@ -262,14 +269,17 @@
                 badgeContainer.id = `badges-${index}`;
                 el.appendChild(badgeContainer);
 
+                // Matemáticas seguras: Calculamos la posición exacta en píxeles
                 const angle = (index * 30) - 90;
                 const radian = angle * (Math.PI / 180);
-                const x = Math.cos(radian) * radius;
-                const y = Math.sin(radian) * radius;
+                
+                // Restamos 30 porque la nota mide 60x60 (así queda justo en el centro)
+                const finalX = centerX + (Math.cos(radian) * radius) - 30;
+                const finalY = centerY + (Math.sin(radian) * radius) - 30;
 
-                // Guardar las variables en el elemento para que CSS las use sin perderlas
-                el.style.setProperty('--tx', `${x}px`);
-                el.style.setProperty('--ty', `${y}px`);
+                // Asignamos coordenadas absolutas. ¡Esto evita el error de que se vayan al centro!
+                el.style.left = `${finalX}px`;
+                el.style.top = `${finalY}px`;
                 el.id = `note-${index}`;
 
                 el.addEventListener('click', () => handleNoteSelect(index));
@@ -281,21 +291,21 @@
             }
         }
 
-        // --- LÓGICA DE EVENTOS ---
+        // --- EVENTOS ---
         btnAccidental.addEventListener('click', () => {
             useFlats = !useFlats;
-            btnAccidental.innerText = useFlats ? "Usar Sostenidos (#)" : "Usar Bemoles (b)";
+            btnAccidental.innerText = useFlats ? "Ver en Sostenidos (#)" : "Ver en Bemoles (b)";
             btnAccidental.classList.toggle('active-toggle', useFlats);
             initCircle();
         });
 
-        // Evento cuando escoges un traste de la lista
+        // Cuando el usuario selecciona un traste en la caja desplegable
         fretSelect.addEventListener('change', (e) => {
             currentFret = parseInt(e.target.value);
             renderFret();
         });
 
-        // Evento cuando tocas el círculo
+        // Cuando el usuario toca una nota en el círculo
         function handleNoteSelect(cofIndex) {
             const currentNotes = useFlats ? notesFlat : notesSharp;
             const currentChrom = useFlats ? chromFlat : chromSharp;
@@ -303,15 +313,15 @@
             const targetNoteName = currentNotes[cofIndex];
             const targetChromIndex = currentChrom.indexOf(targetNoteName);
             
-            // Calculamos en qué traste bajo (0-11) está esa nota en la 1ra cuerda
+            // Calculamos el traste base
             let baseFret = (targetChromIndex - 4 + 12) % 12;
             
             currentFret = baseFret;
-            fretSelect.value = baseFret; // Actualizamos el menú desplegable
+            fretSelect.value = baseFret; // Actualiza la caja desplegable para que coincida
             renderFret();
         }
 
-        // --- RENDERIZADO VISUAL ---
+        // --- DIBUJAR LOS RESULTADOS ---
         function renderFret() {
             if (currentFret === null) return;
 
@@ -334,45 +344,12 @@
                 cofBadgeMap[cofIdx].push(`${stringNum}ª`);
             });
 
-            // Limpiar UI
+            // Apagar todas las notas (solo baja la opacidad, NO mueve la posición)
             document.querySelectorAll('.note').forEach(el => {
                 el.classList.add('inactive');
                 el.classList.remove('active-root');
                 el.querySelector('.string-badge-container').innerHTML = '';
             });
 
-            // Encontrar el índice del círculo para la nota de la 1ra cuerda (raíz)
-            const firstStringCofIdx = chromToCof[(openStringsChrom[0] + currentFret) % 12];
-
-            // Activar las notas correspondientes
-            Object.keys(cofBadgeMap).forEach(cofIdx => {
-                const noteEl = document.getElementById(`note-${cofIdx}`);
-                noteEl.classList.remove('inactive');
-                
-                if (parseInt(cofIdx) === firstStringCofIdx) {
-                    noteEl.classList.add('active-root');
-                }
-
-                const badgeContainer = document.getElementById(`badges-${cofIdx}`);
-                badgeContainer.innerHTML = `<div class="string-badge">${cofBadgeMap[cofIdx].join(', ')}</div>`;
-            });
-
-            // Actualizar Panel
-            fretTitle.innerText = currentFret === 0 ? 'Cuerdas al Aire (Traste 0)' : `Traste ${currentFret}`;
-            
-            stringsList.innerHTML = '';
-            stringsData.forEach(data => {
-                stringsList.innerHTML += `
-                    <div class="string-row">
-                        <span>${data.stringName}</span>
-                        <span>${data.noteName}</span>
-                    </div>
-                `;
-            });
-        }
-
-        initCircle();
-    </script>
-</body>
-</html>
+            const firstStringCofIdx = chromTo
 
